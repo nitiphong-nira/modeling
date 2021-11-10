@@ -1,0 +1,246 @@
+---
+title: "vaccination"
+author: "Nitiphong Nirachornkul"
+date: "10/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(caret)
+library(corrplot)
+library(Hmisc)
+set.seed(5410)
+Dataset<-read.csv("no_intersect.csv", header=TRUE)
+glimpse(Dataset)
+```
+
+
+cleaning processes
+```{R}
+set.seed(5410)
+Dataset[is.na(Dataset)] = 0
+sum(is.na(Dataset))
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+set.seed(5410)
+train_Data <- function(a) 
+  {
+# shuffle the index for the testing data
+  testshuffle1<-sample(nrow(a), 0.3*nrow(a))
+ # Get the training data
+  trainData<-a[-testshuffle1,]
+
+  return(trainData)  
+}
+test_Data <- function(a) 
+  {
+# shuffle the index for the testing data
+  testshuffle1<-sample(nrow(a), 0.3*nrow(a))
+# Get the testing data
+  testData<-a[testshuffle1,]
+ 
+  return(testData)  
+}
+trainData<-as.data.frame(train_Data(Dataset))
+testData<-as.data.frame(test_Data(Dataset))
+
+```
+
+
+```{r, echo = TRUE}
+# The optimal k for model 1 is calculated below
+
+
+set.seed(5410)
+ctrl <- trainControl(method = "cv", number = 10)
+#fit a regression model and use k-fold CV to evaluate performance
+
+lm_model <- train(form = COVID.19~.
+, data = trainData, method = "lm", trControl = ctrl)
+summary(lm_model)
+```
+
+## Including Plots
+```{R}
+set.seed(5410)
+knn_model <- train(form = COVID.19~.
+, data = trainData, method = "knn", trControl = ctrl, tuneGrid = expand.grid(k = seq(1, 50, by = 2)))
+
+```
+
+
+```{R}
+set.seed(5410)
+pls_model <- train(form = COVID.19~.
+, data = trainData, method = "pls", trControl = ctrl)
+
+print(pls_model)
+```
+
+```{R}
+set.seed(5410)
+gbm_model <- train(form = COVID.19~.
+, data = trainData, method = "gbm", trControl = ctrl, verbose = FALSE)
+
+print(gbm_model)
+```
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+set.seed(5410)
+print("                          RMSE            R-sqared")
+print(c("KNN",min(knn_model$results$RMSE), max(knn_model$results$Rsquared)))
+print(c("linear",lm_model$results$RMSE, lm_model$results$Rsquared))
+print(c("Partial least squares",pls_model$results$RMSE[3], pls_model$results$Rsquared[3]))
+print(c("Boosted tree",min(gbm_model$results$RMSE), max(gbm_model$results$Rsquared)))
+
+
+
+```
+```{R}
+set.seed(5410)
+adjusted_lm_model<-lm(COVID.19~month+Sum.of.Malignant.neoplasms+Sum.of.Chronic.lower.respiratory+Sum.of.Other.diseases.of.respiratory.system+Diabetes+Sum.of.Diseases.of.heart+Cardiac.arrest+Cardiac.arrhythmia+Cerebrovascular.diseases+Chronic.lower.respiratory.diseases+Heart.failure+Hypertensive.diseases+Influenza.and.pneumonia+Intentional.and.unintentional.injury..poisoning..and.other.adverse.events+Ischemic.heart.disease+Malignant.neoplasms+Other.diseases.of.the.respiratory.system+Renal.failure+Respiratory.arrest+Respiratory.arrest+Respiratory.failure+Sepsis+Vascular.and.unspecified.dementia, data= trainData)
+summary(adjusted_lm_model)
+
+
+```
+
+```{R}
+set.seed(5410)
+adjusted_model<-(COVID.19~month+Sum.of.Malignant.neoplasms+Sum.of.Chronic.lower.respiratory+Sum.of.Diseases.of.heart+Cardiac.arrest+Cardiac.arrhythmia+Cerebrovascular.diseases+Chronic.lower.respiratory.diseases+Heart.failure+Hypertensive.diseases+Influenza.and.pneumonia+Intentional.and.unintentional.injury..poisoning..and.other.adverse.events+Ischemic.heart.disease+Malignant.neoplasms+Other.diseases.of.the.respiratory.system+Renal.failure+Respiratory.arrest+Respiratory.arrest+Respiratory.failure+Sepsis+Vascular.and.unspecified.dementia)
+adjusted_lm_model<-lm(COVID.19~month+Sum.of.Malignant.neoplasms+Sum.of.Chronic.lower.respiratory+Sum.of.Diseases.of.heart+Cardiac.arrest+Cardiac.arrhythmia+Cerebrovascular.diseases+Chronic.lower.respiratory.diseases+Heart.failure+Hypertensive.diseases+Influenza.and.pneumonia+Intentional.and.unintentional.injury..poisoning..and.other.adverse.events+Ischemic.heart.disease+Malignant.neoplasms+Other.diseases.of.the.respiratory.system+Renal.failure+Respiratory.arrest+Respiratory.arrest+Respiratory.failure+Sepsis+Vascular.and.unspecified.dementia, data= trainData)
+summary(adjusted_lm_model)
+
+
+```
+
+
+
+
+Stepwise
+```{R}
+set.seed(5410)
+library(CombMSC)
+forward_model <-step(lm(COVID.19~.,data = trainData),direction="forward", scope = (~.),trace = 0 , trControl = ctrl)
+
+summary(forward_model)
+
+adjust_forward_model <-
+  step(adjusted_lm_model
+,direction="forward", scope = (~.),trace = 0 , trControl = ctrl)
+
+summary(adjust_forward_model)
+
+compare_function <- function(a) 
+{
+    MSPE_bestsubset=mean(a$residuals^2)
+    ADJR2_baestsubset=summary(a)$adj.r.squared
+    Mallow_bestsubset = Cp(a,S2=summary(a)$sigma^2)
+    AIC_bestsubset = AIC(a,k=2)
+    BIC_bestsubset = AIC(a,k=log(length(trainData)))
+    print(c("Adjust R2 : ",ADJR2_baestsubset))
+    print(c("MPSE : ",MSPE_bestsubset))
+    print(c("Mallow :   ",Mallow_bestsubset))
+    print(c("AIC : ",AIC_bestsubset))
+    print(c("BIC : ",BIC_bestsubset))
+}
+```
+
+
+
+```{R}
+set.seed(5410)
+compare_function(lm(COVID.19~.,data = trainData))
+compare_function(adjusted_lm_model)
+```
+
+
+
+```{R}
+set.seed(5410)
+adjusted_lm_model <- train(form = adjusted_model, data = trainData, method = "lm", trControl = ctrl)
+
+```
+
+## Including Plots
+```{R}
+set.seed(5410)
+adjusted_knn_model <- train(form =adjusted_model, data = trainData, method = "knn", trControl = ctrl, tuneGrid = expand.grid(k = seq(1, 50, by = 2)))
+print(adjusted_knn_model)
+```
+
+
+```{R}
+set.seed(5410)
+adjusted_pls_model <- train(form =adjusted_model, data = trainData, method = "pls", trControl = ctrl)
+
+print(adjusted_pls_model)
+```
+
+```{R}
+set.seed(5410)
+adjusted_gbm_model <- train(form = adjusted_model, data = trainData, method = "gbm", verbose = FALSE, trControl = ctrl)
+
+print(adjusted_gbm_model)
+```
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+set.seed(5410)
+print("                          RMSE            R-sqared")
+print(c("adjusted KNN",min(adjusted_knn_model$results$RMSE), max(adjusted_knn_model$results$Rsquared)))
+print(c("adjusted linear",adjusted_lm_model$results$RMSE, adjusted_lm_model$results$Rsquared))
+print(c("adjusted Partial least squares",adjusted_pls_model$results$RMSE[3], adjusted_pls_model$results$Rsquared[3]))
+print(c("adjusted Boosted tree",min(gbm_model$results$RMSE), max(gbm_model$results$Rsquared)))
+
+print(c("KNN",min(knn_model$results$RMSE), max(knn_model$results$Rsquared)))
+print(c("linear",lm_model$results$RMSE, lm_model$results$Rsquared))
+print(c("Partial least squares",pls_model$results$RMSE[3], pls_model$results$Rsquared[3]))
+print(c("Boosted tree",min(gbm_model$results$RMSE), max(gbm_model$results$Rsquared)))
+
+```
+
+
+Testing
+```{R}
+set.seed(5410)
+lm_model_pred_adjust <-predict(lm(adjusted_model,data = trainData),testData)
+lm_model_pred <-predict(lm(lm_model,data = trainData),testData)
+
+KNN_model_pred_adjust <- predict(train(form =adjusted_model, data = trainData, method = "knn", trControl = ctrl, tuneGrid = expand.grid(k = seq(1, 50, by = 2))),testData)
+
+boosted_model_pred_adjust <- predict(train(form = adjusted_model
+, data = trainData, method = "gbm", verbose = FALSE),testData)
+
+pls_model_pred_adjust <- predict(pls_model, testData)
+
+predictions = data.frame(testData = testData$COVID.19, lm_model_pred_adjust, KNN_model_pred_adjust, boosted_model_pred_adjust, pls_model_pred_adjust, lm_model_pred)
+
+
+print(RMSE(predictions$lm_model_pred_adjust,predictions$testData))
+print(RMSE(predictions$KNN_model_pred_adjust,predictions$testData))
+print(RMSE(predictions$pls_model_pred_adjust,predictions$testData))
+print(RMSE(predictions$boosted_model_pred_adjust,predictions$testData))
+
+print(RMSE(predictions$lm_model_pred,predictions$testData))
+
+```
+
+```{R}
+library(ggplot2)
+ggplot(Dataset, aes(x = log(COVID.19)))+geom_histogram()
+summary(Dataset$COVID.19)
+sd(Dataset$COVID.19)
+
+```

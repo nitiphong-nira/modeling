@@ -1,0 +1,118 @@
+---
+title: "Fators of COVID-19 Death Rate"
+author: "Nitiphong Nirachornkul"
+date: "10/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(skimr)
+library(corrplot)
+library(moderndive)
+library(modelr)
+library(flexclust)
+library(caret)
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+Dataset<-read.csv("R-Logistics.csv", header=TRUE)
+glimpse(Dataset)
+
+```
+
+```{r pressure, echo=FALSE}
+set.seed(5410)
+train_Data <- function(a) 
+  {
+# shuffle the index for the testing data
+  testshuffle1<-sample(nrow(a), 0.25*nrow(a))
+ # Get the training data
+  trainData<-a[-testshuffle1,]
+
+  return(trainData)  
+}
+test_Data <- function(a) 
+  {
+# shuffle the index for the testing data
+  testshuffle1<-sample(nrow(a), 0.25*nrow(a))
+# Get the testing data
+  testData<-a[testshuffle1,]
+ 
+  return(testData)  
+}
+
+trainData<-as.data.frame(train_Data(Dataset))
+testData<-as.data.frame(test_Data(Dataset))
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+set.seed(5410)
+
+
+Dataset$Cause_of_death <- recode(Dataset$Cause_of_death, '1'='covid', '0'='noncovid')
+
+model_logit <- glm(Cause_of_death ~ trainData$condition+trainData$condition_group+year+month+age_group, family="binomial", weight = trainData$death_rate, data = trainData)
+
+
+```
+
+
+```{r}
+
+predictions <- predict(glm(Cause_of_death ~ testData$condition+testData$condition_group+year+month+age_group, family="binomial", weight = testData$death_rate, data = testData), type = "response") 
+predicted.classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Plot model error RMSE vs different values of k
+plot(model_logit)
+summary(model_logit)
+# Best tuning parameter k that minimize the RMSE
+model_logit$bestTune
+
+# Make predictions on the test data
+print(predicted.classes)
+
+# Compute the prediction error RMSE
+model_accuracy<-mean((as.numeric(predicted.classes)==as.numeric(testData$Cause_of_death)))
+print(model_accuracy)
+```
+
+
+```{r pressure, echo=FALSE}
+
+predictions_linear <- predict(lm(Cause_of_death ~ testData$condition+testData$condition_group+year+month+age_group, weight = testData$death_rate, data = testData), type = "response") 
+predictions_linear<- ifelse(predictions_linear > 0.5, 1, 0)
+print(predictions_linear)
+mean(predictions_linear==testData$Cause_of_death)
+
+
+```
+```{r}
+library(vtreat)
+splitPlan <- kWayCrossValidation(nrow(trainData), 4, NULL, NULL)
+
+trainData$pred_interaction <- 0
+# Sample code: Get cross-val predictions for main-effects only model
+model_logit$pred_add <- 0  # initialize the prediction vector
+for(i in 1:4) {
+  split <- splitPlan[[i]]
+  trainData$pred_add[split$app] <- predict(model_logit, newdata = trainData)
+}
+
+trainData$pred_add<-ifelse(trainData$pred_add > 0, 1, 0)
+rmse = mean(trainData$Cause_of_death == trainData$pred_add)
+print(rmse)
+
+
+```
